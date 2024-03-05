@@ -49,20 +49,19 @@ export default Gameboard = ({navigation, route}) => {
 
     // This useEffect is for reading scoreboard from the asyncstorage when user is navigating back to screen ( code is in the assignment instructions). Trigger here is the navigation for the useEffect.
 
-    //This useEffect is for handling the gameflow so that the game does not stop too early or does not continue after it should not. Trigger here is number of thorws left. Another reason for putting the number of throws left as a trigger is to avoid the one step behind problem.
     
     useEffect(() => {
         if (numberOfThrowsLeft === 0) {
-            if (totalThrows === 18) {
-                // If the total number of throws is 18, end the game
+            if (totalThrows === 18 && allSpotsChosen) {
+                // If the total number of throws is 18 or all spots are chosen, end the game
                 setGameEndStatus(true);
-                setStatus('Game Ended: reached 18 throws');
+                setStatus('Game Ended.');
             } else {
                 // If it's the end of the turn, start a new turn
                 setStatus('Select points for the combination.');
             }
         }
-    }, [numberOfThrowsLeft, totalThrows]);
+    }, [numberOfThrowsLeft, totalThrows, allSpotsChosen, dicePointsTotal]);
 
     useEffect(() => {
         const totalScore = dicePointsTotal.reduce((sum, points) => sum + points, 0);
@@ -154,11 +153,8 @@ function getPointColor(i) {
 }
 
 const selectDicePoints = (i) => {
-    // Check if there are throws left
     if (numberOfThrowsLeft === 0 && !gameEndStatus) {
-        // Only allow selecting points if there are no throws left and the game hasn't ended
         if (!selectedDicePoints[i]) {
-            // Check if the point has not been selected already
             let selectedPoints = [...selectedDicePoints];
             let points = [...dicePointsTotal];
             selectedPoints[i] = true;
@@ -167,15 +163,21 @@ const selectDicePoints = (i) => {
             setDicePointsTotal(points);
             setSelectedDicePoints(selectedPoints);
 
-            // Start a new turn after selecting points
-            setNumberOfThrowsLeft(NBR_OF_THROWS); // Reset throws for the next turn
-            setSelectedDices(Array(NBR_OF_DICES).fill(false)); // Reset selected dice
-            setStatus('New turn: throw dices.');
+            const allChosen = selectedPoints.every((point) => point);
+            setAllSpotsChosen(allChosen);
+
+            // Start a new turn only if the total number of throws has not been reached
+            if (totalThrows < 18) {
+                setNumberOfThrowsLeft(NBR_OF_THROWS); // Reset throws for the next turn
+                setSelectedDices(Array(NBR_OF_DICES).fill(false)); // Reset selected dice
+                setStatus('New turn: throw dices.');
+            } else {
+                setStatus('The game has ended. Please start a new game.');
+            }
         } else {
             setStatus('You have already selected this point.');
         }
     } else if (gameEndStatus && !allSpotsChosen) {
-        // Allow selecting points if the game has ended and all the spots are not selected yet.
         let selectedPoints = [...selectedDicePoints];
         let points = [...dicePointsTotal];
         selectedPoints[i] = true;
@@ -183,6 +185,9 @@ const selectDicePoints = (i) => {
         points[i] = nbrOfDices * (i + 1);
         setDicePointsTotal(points);
         setSelectedDicePoints(selectedPoints);
+
+        const allChosen = selectedPoints.every((point) => point);
+        setAllSpotsChosen(allChosen);
     } else {
         setStatus('You cannot select points at this point.');
     }
@@ -222,6 +227,24 @@ const throwDices = () => {
     
 }
 
+const resetGame = () => {
+    setNumberOfThrowsLeft(NBR_OF_THROWS);
+    setStatus('Throw Dices');
+    setGameEndStatus(false);
+    setRemainingForBonus(BONUS_POINTS_LIMIT);
+    setScore(0);
+    setAllSpotsChosen(false);
+    setTotalThrows(0);
+    setSelectedDices(new Array(NBR_OF_DICES).fill(false));
+    setDiceSpots(new Array(NBR_OF_DICES).fill(0));
+    setSelectedDicePoints(new Array(MAX_SPOT).fill(false));
+    setDicePointsTotal(new Array(MAX_SPOT).fill(0));
+};
+
+const startNewGame = () => {
+    resetGame();
+};
+
 let dicesContent;
 
 // Check if the dices have been thrown
@@ -244,11 +267,15 @@ if (totalThrows === 0) {
             {dicesContent}
             <Text>{status}</Text>
             <Text>Throws Left: {numberOfThrowsLeft}</Text>
-            <Pressable
-                onPress={() => throwDices()}
-            >
-                <Text>THROW DICES</Text>
-            </Pressable>
+            {gameEndStatus ? (
+        <Pressable onPress={startNewGame}>
+            <Text>Start New Game</Text>
+        </Pressable>
+         ) : (
+        <Pressable onPress={throwDices}>
+            <Text>THROW DICES</Text>
+        </Pressable>
+         )}
             <Text>Total Score: {score}</Text>
             <Text>
                 {remainingForBonus > 0 ? `You are ${remainingForBonus} points away from bonus!` : 'Bonus points added to your total score!'}
