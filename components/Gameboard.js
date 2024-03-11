@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { Text, View, Pressable } from 'react-native';
 import Header from './Header';
 import Footer from './Footer';
@@ -12,15 +12,21 @@ import {
 import styles from '../styles/style';
 import { Container, Row, Col } from 'react-native-flex-grid';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { horizontalScale, moderateScale, verticalScale } from '../styles/Metrics';
+import { saveScoreboardData, getScoreboardData } from './Storage';
+import { GameStatetContext } from './Context';
+import style from '../styles/style';
 
 
 let board = [];
 
 export default Gameboard = ({navigation, route}) => {
 
+    const {setGameEnd} = useContext(GameStatetContext);
+
     const [playerName, setPlayerName] = useState('');
     const [numberOfThrowsLeft, setNumberOfThrowsLeft] = useState(NBR_OF_THROWS);
-    const [status, setStatus] = useState('Throw Dices');
+    const [status, setStatus] = useState('Throw Dices to start the game');
     const [gameEndStatus, setGameEndStatus] = useState(false);
     const [remainingForBonus, setRemainingForBonus] = useState(BONUS_POINTS_LIMIT);
     const [score, setScore] = useState(0);
@@ -49,6 +55,13 @@ export default Gameboard = ({navigation, route}) => {
 
     // This useEffect is for reading scoreboard from the asyncstorage when user is navigating back to screen ( code is in the assignment instructions). Trigger here is the navigation for the useEffect.
 
+    useEffect (() => {
+        const unsubscribe = navigation.addListener('focus', () => {
+            getScoreboardData();
+        });
+        return unsubscribe;
+    }, [navigation])
+
     
     useEffect(() => {
         if (numberOfThrowsLeft === 0) {
@@ -56,24 +69,26 @@ export default Gameboard = ({navigation, route}) => {
                 // If the total number of throws is 18 or all spots are chosen, end the game
                 setGameEndStatus(true);
                 setStatus('Game Ended.');
+                endGame(playerName);
             } else {
                 // If it's the end of the turn, start a new turn
                 setStatus('Select points for the combination.');
             }
         }
-    }, [numberOfThrowsLeft, totalThrows, allSpotsChosen, dicePointsTotal]);
+    }, [numberOfThrowsLeft, totalThrows, allSpotsChosen]);
 
-    useEffect(() => {
+
+    const calculateScore = () => {
         const totalScore = dicePointsTotal.reduce((sum, points) => sum + points, 0);
         const untilBonus = Math.max(0, BONUS_POINTS_LIMIT - totalScore);
         setRemainingForBonus(untilBonus);
-
+    
         if (totalScore >= 63) {
-            setScore(totalScore+BONUS_POINTS);
+            setScore(totalScore + BONUS_POINTS);
         } else {
             setScore(totalScore); // Set total score without bonus points
         }
-    }, [selectedDicePoints, dicePointsTotal]);
+    };
 
     const dicesRow = [];
     for (let dice = 0; dice < NBR_OF_DICES; dice++) {
@@ -97,7 +112,7 @@ export default Gameboard = ({navigation, route}) => {
     for ( let spot = 0 ; spot < MAX_SPOT; spot++) {
         pointsRow.push(
             <Col key={'pointsRow' + spot}>
-                <Text key={'pointsRow' + spot}>
+                <Text key={'pointsRow' + spot} style={style.row}>
                     {getSpotTotal(spot)}
                 </Text>
             </Col>
@@ -115,7 +130,8 @@ export default Gameboard = ({navigation, route}) => {
         name={'numeric-'+(diceButton +1) +'-circle'}
         key={'buttonsRow' + diceButton}
         size={30}
-        color={getPointColor(diceButton)}>
+        color={getPointColor(diceButton)}
+        style={style.pointRow}>
         </MaterialCommunityIcons>
         </Pressable>
     </Col>
@@ -123,7 +139,7 @@ export default Gameboard = ({navigation, route}) => {
     }
 
 function getDiceColor (i) {
-    return selectedDices[i] ? 'black' : 'steelblue';
+    return selectedDices[i] ? '#FFBE98' : '#365486';
 }
 
 const selectDice = (i) => {
@@ -146,9 +162,9 @@ const selectDice = (i) => {
 
 function getPointColor(i) {
     if (gameEndStatus) {
-        return allSpotsChosen || selectedDicePoints[i] ? 'black' : 'steelblue';
+        return allSpotsChosen || selectedDicePoints[i] ? '#FFBE98' : '#365486';
     } else {
-        return selectedDicePoints[i] ? 'black' : 'steelblue';
+        return selectedDicePoints[i] ? '#FFBE98' : '#365486';
     }
 }
 
@@ -166,14 +182,14 @@ const selectDicePoints = (i) => {
             const allChosen = selectedPoints.every((point) => point);
             setAllSpotsChosen(allChosen);
 
+            calculateScore();
+
             // Start a new turn only if the total number of throws has not been reached
             if (totalThrows < 18) {
                 setNumberOfThrowsLeft(NBR_OF_THROWS); // Reset throws for the next turn
                 setSelectedDices(Array(NBR_OF_DICES).fill(false)); // Reset selected dice
                 setStatus('New turn: throw dices.');
-            } else {
-                setStatus('The game has ended. Please start a new game.');
-            }
+            } 
         } else {
             setStatus('You have already selected this point.');
         }
@@ -188,6 +204,7 @@ const selectDicePoints = (i) => {
 
         const allChosen = selectedPoints.every((point) => point);
         setAllSpotsChosen(allChosen);
+        calculateScore();
     } else {
         setStatus('You cannot select points at this point.');
     }
@@ -229,7 +246,7 @@ const throwDices = () => {
 
 const resetGame = () => {
     setNumberOfThrowsLeft(NBR_OF_THROWS);
-    setStatus('Throw Dices');
+    setStatus('Throw Dices to start the game');
     setGameEndStatus(false);
     setRemainingForBonus(BONUS_POINTS_LIMIT);
     setScore(0);
@@ -239,10 +256,37 @@ const resetGame = () => {
     setDiceSpots(new Array(NBR_OF_DICES).fill(0));
     setSelectedDicePoints(new Array(MAX_SPOT).fill(false));
     setDicePointsTotal(new Array(MAX_SPOT).fill(0));
+    setGameEnd(false);
 };
 
 const startNewGame = () => {
     resetGame();
+};
+
+const endGame = (playerName) => {
+
+    setScore(score);
+    // Get current timestamp
+    const timestamp = new Date().toISOString();
+
+    // Create a new game data object
+    const gameData = { playerName, score, timestamp };
+
+    // Save game data to AsyncStorage
+    saveGameScoreToStorage(gameData);
+};
+
+const saveGameScoreToStorage = async (gameData) => {
+    // Retrieve existing scoreboard data
+    let scoreboardData = await getScoreboardData();
+
+    // Append the new game data to the existing scoreboard data
+    scoreboardData = [...scoreboardData, gameData];
+
+    // Save updated scoreboard data to AsyncStorage
+    saveScoreboardData(scoreboardData);
+    setGameEnd(true);
+    
 };
 
 let dicesContent;
@@ -252,8 +296,9 @@ if (totalThrows === 0) {
     // If dices haven't been thrown, render a placeholder icon or text
     dicesContent = <MaterialCommunityIcons
     name={'information-outline'}
-    size={55}
-    color={'steelblue'}>
+    size={moderateScale(70)}
+    color={'#365486'}
+    style={style.infoIcon}>
     </MaterialCommunityIcons>;
 } else {
     // If dices have been thrown, render the actual dices
@@ -263,21 +308,22 @@ if (totalThrows === 0) {
     return (
         <>
         <Header/>
-        <View>
+        <View style={style.container}>
+        <Text style={style.title}>Player: {playerName}</Text>
             {dicesContent}
-            <Text>{status}</Text>
-            <Text>Throws Left: {numberOfThrowsLeft}</Text>
+            <Text style={style.statusText}>{status}</Text>
             {gameEndStatus ? (
-        <Pressable onPress={startNewGame}>
-            <Text>Start New Game</Text>
+        <Pressable onPress={startNewGame} style={style.button}>
+            <Text style={style.buttonText}>Start New Game</Text>
         </Pressable>
          ) : (
-        <Pressable onPress={throwDices}>
-            <Text>THROW DICES</Text>
+        <Pressable onPress={throwDices} style={style.button}>
+            <Text style={style.buttonText}>THROW DICES</Text>
         </Pressable>
          )}
-            <Text>Total Score: {score}</Text>
-            <Text>
+            <Text style={style.text}>Throws Left: {numberOfThrowsLeft}</Text>
+            <Text style={style.text}>Total Score: {score}</Text>
+            <Text style={style.text}>
                 {remainingForBonus > 0 ? `You are ${remainingForBonus} points away from bonus!` : 'Bonus points added to your total score!'}
             </Text>
             <Container fluid>
@@ -286,7 +332,6 @@ if (totalThrows === 0) {
             <Container fluid>
                 <Row>{pointsToSelectRow}</Row>
             </Container>
-            <Text>Player: {playerName}</Text>
         </View>
         <Footer/>
         </>
