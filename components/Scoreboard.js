@@ -19,7 +19,6 @@ export default Scoreboard = ({ navigation }) => {
 
     const fetchScoreboardData = async () => {
         const data = await getScoreboardData();
-        console.log('Scoreboard data:', data);
         if (data) {
             const sortedData = data.sort((a, b) => b.score - a.score);
             const topEntries = sortedData.slice(0, MAX_NBR_OF_SCOREBOARD_ROWS);
@@ -29,11 +28,8 @@ export default Scoreboard = ({ navigation }) => {
 
     const clearScoreboard = async () => {
         try {
-            await clearScoreboardData(); // Clear scoreboard data from AsyncStorage
-            // Optionally, reset the scoreboard state in your component if needed
+            await clearScoreboardData();
             setScoreboardData([]);
-            // Optionally, provide feedback to the user that the scoreboard has been cleared
-            console.log('Scoreboard cleared successfully.');
         } catch (error) {
             console.error('Error clearing scoreboard:', error);
         }
